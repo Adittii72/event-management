@@ -1,18 +1,22 @@
 import express from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
 
 const app = express();
 const PORT = 5001;
-app.use(cors()); // Allows React app (on a different port) to make requests
-app.use(bodyParser.json()); // Allows server to read JSON from POST requests
 
-// In-Memory "Database" 
+// --- Middleware ---
+// This allows your frontend (running on a different port) to make requests to this backend.
+app.use(cors());
+// This allows the server to understand incoming JSON in request bodies (for our POST endpoint).
+app.use(express.json());
+
+// --- In-Memory Database ---
+// This is our simple 'database' as requested in the PDF.
 let events = [
   {
     id: 1,
     title: 'React Meetup',
-    description: 'A deep dive into React Hooks and state management.',
+    description: 'A deep dive into React Hooks and server components.',
     location: 'Online',
     date: '2025-11-10T19:00:00.000Z',
     maxParticipants: 50,
@@ -21,7 +25,7 @@ let events = [
   {
     id: 2,
     title: 'Node.js Workshop',
-    description: 'Building fast and scalable APIs with Express and Node.',
+    description: 'Building fast and scalable APIs with Express and Node.js.',
     location: 'Community Hall',
     date: '2025-11-12T10:00:00.000Z',
     maxParticipants: 30,
@@ -29,93 +33,102 @@ let events = [
   },
   {
     id: 3,
-    title: 'Startup Pitch Night',
-    description: 'Local founders pitch their ideas. Networking and snacks provided.',
-    location: 'WeWork, Koramangala',
-    date: '2025-11-15T18:30:00.000Z',
-    maxParticipants: 75,
-    currentParticipants: 40,
+    title: 'CSS Masters',
+    description: 'Join us to explore the new features of CSS, including container queries and cascade layers.',
+    location: 'Online',
+    date: '2025-11-14T17:00:00.000Z',
+    maxParticipants: 100,
+    currentParticipants: 45,
   },
   {
     id: 4,
-    title: 'Intro to Generative AI',
-    description: 'A beginner-friendly session on ChatGPT, DALL-E, and the future of AI.',
-    location: 'Online',
-    date: '2025-11-18T17:00:00.000Z',
-    maxParticipants: 100,
+    title: 'AI & The Future of Devs',
+    description: 'A panel discussion on how generative AI is changing the landscape for software engineers.',
+    location: 'IISc, Bangalore',
+    date: '2025-11-25T18:00:00.000Z',
+    maxParticipants: 150,
     currentParticipants: 0,
   },
   {
     id: 5,
-    title: 'Local Farmers Market',
-    description: 'Support local vendors and enjoy fresh produce.',
-    location: 'Community Hall',
-    date: '2025-11-22T09:00:00.000Z',
-    maxParticipants: 200,
+    title: 'Cubbon Park Dog Meetup',
+    description: 'Bring your furry friends! All breeds (and humans) welcome.',
+    location: 'Cubbon Park',
+    date: '2025-11-30T09:00:00.000Z',
+    maxParticipants: 50,
     currentParticipants: 0,
   },
 ];
-
+// This keeps track of the next available ID for new events
 let nextId = 6;
 
-// API Endpoints (The 3 Requirements) 
+// --- API Endpoints ---
 
-
+// 1. GET /api/events (Get all events, with optional search and location filter)
+//    This is the part that we just updated.
 app.get('/api/events', (req, res) => {
-  const { location } = req.query;
+  // Get the 'search' and 'location' query parameters from the URL
+  // e.g., /api/events?search=react&location=online
+  const { search, location } = req.query;
 
-  let filteredEvents = [...events];
+  let filteredEvents = events;
 
+  // 1. Filter by search term (if one is provided)
+  if (search) {
+    filteredEvents = filteredEvents.filter((event) =>
+      event.title.toLowerCase().includes(search.toLowerCase())
+    );
+  }
+
+  // 2. Filter by location (if one is provided)
   if (location) {
-    filteredEvents = filteredEvents.filter(event =>
+    filteredEvents = filteredEvents.filter((event) =>
       event.location.toLowerCase().includes(location.toLowerCase())
     );
   }
-  
-  res.json(filteredEvents.reverse());
+
+  // We reverse the list so that new events appear at the top
+  res.json(filteredEvents.slice().reverse());
 });
 
-
+// 2. GET /api/events/:id (Get a single event by its ID)
 app.get('/api/events/:id', (req, res) => {
-  const eventId = parseInt(req.params.id);
-  const event = events.find(e => e.id === eventId);
-
+  // Find the event in our 'database'
+  const event = events.find((e) => e.id === parseInt(req.params.id));
+  
+  // If we don't find the event, send a 404 (Not Found) error
   if (!event) {
     return res.status(404).json({ message: 'Event not found' });
   }
   
+  // If we find it, send the event
   res.json(event);
 });
 
-
+// 3. POST /api/events (Create a new event)
 app.post('/api/events', (req, res) => {
+  // Get the data from the request body
   const { title, description, location, date, maxParticipants } = req.body;
 
-  if (!title || !description || !location || !date || !maxParticipants) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
-
-
+  // Create the new event object
   const newEvent = {
-    id: nextId++, 
+    id: nextId++,
     title,
     description,
     location,
     date,
-    maxParticipants: parseInt(maxParticipants),
-    currentParticipants: 0,
+    maxParticipants: parseInt(maxParticipants, 10),
+    currentParticipants: 0, // New events always start with 0 participants
   };
 
-
+  // Add the new event to our 'database'
   events.push(newEvent);
 
-  console.log('Event created:', newEvent);
-  
-
+  // Send a 201 (Created) status and the new event back to the frontend
   res.status(201).json(newEvent);
 });
 
-//  Start the Server 
+// --- Start the Server ---
 app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);
 });

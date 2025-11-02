@@ -3,24 +3,34 @@ import axios from 'axios';
 import { useParams, Link } from 'react-router-dom';
 
 function EventDetail() {
-  const [event, setEvent] = useState(null); // State for ONE event, starts as null
-  const { id } = useParams(); // Gets the ':id' from the URL
+  const [event, setEvent] = useState(null);
+  // --- NEW: Add loading and error states ---
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const { id } = useParams();
 
   useEffect(() => {
     const fetchEvent = async () => {
+      // --- NEW: Set loading/error states ---
+      setLoading(true);
+      setError(null);
       try {
-        // Fetch a single event using its ID
         const response = await axios.get(`http://localhost:5001/api/events/${id}`);
         setEvent(response.data);
-      } catch (error) {
-        console.error('Error fetching event details:', error);
+      } catch (err) {
+        console.error('Error fetching event details:', err);
+        // --- NEW: Set error message ---
+        setError('Failed to load event details. It may not exist.');
+      } finally {
+        // --- NEW: Set loading to false ---
+        setLoading(false);
       }
     };
 
     fetchEvent();
-  }, [id]); // This effect re-runs if the 'id' in the URL changes
+  }, [id]);
 
-  // Helper function to format the date
   const formatDate = (dateString) => {
     const options = {
       year: 'numeric',
@@ -32,16 +42,23 @@ function EventDetail() {
     return new Date(dateString).toLocaleString(undefined, options);
   };
 
-  // Show a loading message while we fetch data
-  if (!event) {
+  // --- NEW: Render loading and error states ---
+  if (loading) {
     return <p>Loading event details...</p>;
   }
 
-  // Once data is loaded, show the details
+  if (error) {
+    return <p className="error-message">{error}</p>;
+  }
+
+  // If the event is not found (but no server error), event will be null
+  if (!event) {
+    return <p>Event not found.</p>;
+  }
+
   return (
     <div className="event-detail">
       <h2>{event.title}</h2>
-      {/* This line is now fixed with </p> */}
       <p><strong>When:</strong> {formatDate(event.date)}</p>
       <p><strong>Where:</strong> {event.location}</p>
       <p>
