@@ -1,13 +1,329 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+    .card {
+      background-color: #1e293b;
+    }
+    .btn-primary {
+      background-color: #6366f1;
+      color: white;
+    }
+    .btn-primary:hover {
+      background-color: #4f46e5;
+    }
+    .input-field {
+      background-color: #334155;
+      color: #e2e8f0;
+    }
+    /* Simple modal style for alerts */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background-color: #dc2626; /* Red */
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      font-weight: 500;
+      transform: translateY(-100%);
+      transition: transform 0.3s ease-out;
+      z-index: 100;
+    }
+    .modal.show {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+  
+  <!-- Custom Alert Modal -->
+  <div id="alertModal" class="modal">
+    <p id="alertMessage"></p>
+  </div>
+
+  <h1 class="text-3xl font-extrabold mb-6">Event Manager</h1>
+
+  <!-- Event List -->
+  <div id="event-list">
+    <div class="flex items-center gap-4 mb-6">
+      <input id="searchTitle" type="text" placeholder="Search by title..." class="input-field w-1/2 px-4 py-2 rounded-lg outline-none" />
+      <input id="filterLocation" type="text" placeholder="Filter by location..." class="input-field w-1/2 px-4 py-2 rounded-lg outline-none" />
+      <button id="createEventBtn" class="btn-primary px-4 py-2 rounded-lg font-semibold">+ Create Event</button>
+    </div>
+
+    <div id="eventsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Events will be loaded here by JavaScript -->
+    </div>
+  </div>
+
+  <!-- Event Details -->
+  <div id="event-details" class="hidden">
+    <button id="backToList" class="px-4 py-2 mb-6 rounded-lg bg-gray-600 hover:bg-gray-500">&larr; Back to List</button>
+    <h2 id="detailTitle" class="text-3xl font-extrabold mb-2"></h2>
+    <p id="detailDesc" class="mb-6 text-gray-300"></p>
+
+    <div class="flex flex-col sm:flex-row gap-4 mb-6">
+      <div class="card rounded-lg p-4 flex-1">
+        <h3 class="font-semibold mb-1">Location</h3>
+        <p id="detailLocation" class="text-gray-300"></p>
+      </div>
+      <div class="card rounded-lg p-4 flex-1">
+        <h3 class="font-semibold mb-1">Date & Time</h3>
+        <p id="detailDate" class="text-gray-300"></p>
+      </div>
+    </div>
+
+    <div class="card rounded-lg p-4">
+      <h3 class="font-semibold mb-2">Participants (<span id="detailParticipantsCount"></span>)</h3>
+      <div id="detailParticipants" class="flex flex-wrap gap-2">
+        <!-- Participants will be shown here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Event -->
+  <div id="create-event" class="hidden">
+    <button id="backToList2" class="px-4 py-2 mb-6 rounded-lg bg-gray-600 hover:bg-gray-500">&larr; Back to List</button>
+    <h2 class="text-3xl font-extrabold mb-6">Create a New Event</h2>
+
+    <div class="card p-6 rounded-lg space-y-4">
+      <div>
+        <label class="block mb-1">Event Title</label>
+        <input id="eventTitle" type="text" class="w-full input-field px-4 py-2 rounded-lg" />
+      </div>
+
+      <div>
+        <label class="block mb-1">Description</label>
+        <textarea id="eventDesc" class="w-full input-field px-4 py-2 rounded-lg" rows="3"></textarea>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block mb-1">Location</label>
+          <input id="eventLocation" type="text" class="w-full input-field px-4 py-2 rounded-lg" />
+        </div>
+        <div class="flex-1">
+          <label class="block mb-1">Date and Time</label>
+          <input id="eventDate" type="datetime-local" class="w-full input-field px-4 py-2 rounded-lg" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block mb-1">Max Participants</label>
+        <input id="eventMax" type="number" class="w-full input-field px-4 py-2 rounded-lg" />
+      </div>
+
+      <button id="saveEventBtn" class="btn-primary px-4 py-2 rounded-lg font-semibold">Create Event</button>
+    </div>
+  </div>
+
+  <!-- 
+  =============================================================
+  == JAVASCRIPT SECTION: All logic has been updated for API ===
+  =============================================================
+  -->
+  <script>
+    // --- MODIFICATION: API URL ---
+    const API_URL = 'http://localhost:5001/api/events';
+
+    // --- DOM Elements ---
+    const eventList = document.getElementById("event-list");
+    const eventDetails = document.getElementById("event-details");
+    const createEvent = document.getElementById("create-event");
+    const eventsContainer = document.getElementById("eventsContainer");
+    
+    // --- Custom Alert ---
+    const alertModal = document.getElementById("alertModal");
+    const alertMessage = document.getElementById("alertMessage");
+    let alertTimeout;
+    
+    function showAlert(message) {
+      clearTimeout(alertTimeout);
+      alertMessage.innerText = message;
+      alertModal.classList.add("show");
+      alertTimeout = setTimeout(() => {
+        alertModal.classList.remove("show");
+      }, 3000);
+    }
+    
+    // --- MODIFICATION: Removed hardcoded 'events' array ---
+
+    // --- MODIFICATION: 'renderEvents' now takes data as an argument ---
+    function renderEvents(events) {
+      eventsContainer.innerHTML = "";
+      if (events.length === 0) {
+        eventsContainer.innerHTML = `<p class="text-gray-400 col-span-3 text-center">No events found.</p>`;
+        return;
+      }
+      
+      events.forEach((event) => {
+        const card = document.createElement("div");
+        card.className = "card p-4 rounded-lg flex flex-col justify-between";
+        
+        // --- MODIFICATION: Using backend field names (event.id, event.currentParticipants, etc.) ---
+        card.innerHTML = `
+          <div>
+            <h3 class="text-lg font-bold mb-1">${event.title}</h3>
+            <p class="text-gray-400 mb-1"><span>📍</span> ${event.location}</p>
+            <p class="text-gray-400 mb-4"><span>📅</span> ${new Date(event.date).toLocaleDateString()}</p>
+          </div>
+          <div class="flex items-center justify-between bg-slate-700 rounded-lg px-3 py-2">
+            <p class="text-sm text-indigo-300">👥 ${event.currentParticipants} / ${event.maxParticipants}</p>
+            <!-- MODIFICATION: Pass event.id, not index -->
+            <button class="text-indigo-400 font-medium hover:text-indigo-300" onclick="viewDetails(${event.id})">View Details →</button>
+          </div>`;
+        eventsContainer.appendChild(card);
+      });
+    }
+
+    // --- MODIFICATION: 'viewDetails' now fetches from API by ID ---
+    async function viewDetails(id) {
+      try {
+        const response = await fetch(`${API_URL}/${id}`);
+        if (!response.ok) throw new Error("Event not found");
+        
+        const event = await response.json();
+        
+        eventList.classList.add("hidden");
+        eventDetails.classList.remove("hidden");
+        
+        // --- MODIFICATION: Using backend field names ---
+        document.getElementById("detailTitle").innerText = event.title;
+        document.getElementById("detailDesc").innerText = event.description;
+        document.getElementById("detailLocation").innerText = event.location;
+        document.getElementById("detailDate").innerText = new Date(event.date).toLocaleString();
+        document.getElementById("detailParticipantsCount").innerText = `${event.currentParticipants} / ${event.maxParticipants}`;
+        
+        // --- MODIFICATION: Simpler participant display ---
+        const participantsDiv = document.getElementById("detailParticipants");
+        participantsDiv.innerHTML = ""; // Clear old names
+        if (event.currentParticipants > 0) {
+           const span = document.createElement("span");
+           span.className = "px-3 py-1 rounded-full bg-indigo-600 text-sm";
+           span.innerText = `${event.currentParticipants} attendees`;
+           participantsDiv.appendChild(span);
+        } else {
+           participantsDiv.innerText = "Be the first to join!";
+        }
+
+      } catch (error) {
+        console.error("Error fetching details:", error);
+        showAlert(error.message);
+      }
+    }
+
+    // --- View Switching (No changes needed) ---
+    document.getElementById("createEventBtn").onclick = () => {
+      eventList.classList.add("hidden");
+      createEvent.classList.remove("hidden");
+    };
+    document.getElementById("backToList").onclick = () => {
+      eventDetails.classList.add("hidden");
+      eventList.classList.remove("hidden");
+    };
+    document.getElementById("backToList2").onclick = () => {
+      createEvent.classList.add("hidden");
+      eventList.classList.remove("hidden");
+    };
+
+    // --- MODIFICATION: 'saveEventBtn' now POSTs to API ---
+    document.getElementById("saveEventBtn").onclick = async () => {
+      const title = document.getElementById("eventTitle").value;
+      const description = document.getElementById("eventDesc").value;
+      const location = document.getElementById("eventLocation").value;
+      const date = document.getElementById("eventDate").value;
+      const maxParticipants = parseInt(document.getElementById("eventMax").value); // Field name must match backend
+
+      if (!title || !location || !date || !maxParticipants) {
+        showAlert("Please fill all required fields!");
+        return;
+      }
+
+      // --- MODIFICATION: Create object that matches backend model ---
+      const newEvent = {
+        title,
+        description,
+        location,
+        date,
+        maxParticipants
+      };
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newEvent)
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create event. Check the server.");
+        }
+
+        // --- MODIFICATION: Clear form and go back to list ---
+        document.getElementById("eventTitle").value = "";
+        document.getElementById("eventDesc").value = "";
+        document.getElementById("eventLocation").value = "";
+        document.getElementById("eventDate").value = "";
+        document.getElementById("eventMax").value = "";
+        
+        createEvent.classList.add("hidden");
+        eventList.classList.remove("hidden");
+        
+        loadEvents(); // Refresh the event list
+        showAlert("Event created successfully!");
+
+      } catch (error) {
+        console.error("Error creating event:", error);
+        showAlert(error.message);
+      }
+    };
+    
+    // --- MODIFICATION: New function to load events from API ---
+    async function loadEvents() {
+      const searchTerm = document.getElementById("searchTitle").value;
+      const locationFilter = document.getElementById("filterLocation").value;
+      
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (locationFilter) params.append('location', locationFilter);
+      
+      // --- MODIFICATION: Add loading state ---
+      eventsContainer.innerHTML = `<p class="text-gray-400 col-span-3 text-center">Loading events...</p>`;
+      
+      try {
+        const response = await fetch(`${API_URL}?${params.toString()}`);
+        if (!response.ok) throw new Error("Could not fetch events from the server.");
+        
+        const eventsData = await response.json();
+        renderEvents(eventsData);
+        
+      } catch (error) {
+        console.error("Error loading events:", error);
+        eventsContainer.innerHTML = `<p class="text-red-500 col-span-3 text-center">${error.message}</p>`;
+      }
+    }
+    
+    // --- MODIFICATION: Add listeners for search/filter ---
+    document.getElementById("searchTitle").addEventListener("input", loadEvents);
+    document.getElementById("filterLocation").addEventListener("input", loadEvents);
+
+    // --- MODIFICATION: Initial load ---
+    loadEvents();
+  </script>
+</body>
 </html>
+
+
